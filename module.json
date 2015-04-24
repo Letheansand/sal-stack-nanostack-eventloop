@@ -15,7 +15,8 @@
   ],
   "dependencies": {
     "mbed-client-libservice" : "ARMmbed/mbed-client-libservice#alpha2-release",
-    "mbed-6lowpan-eventloop-adaptor" : "ARMmbed/mbed-6lowpan-eventloop-adaptor#alpha2-release"
+    "mbed-6lowpan-eventloop-adaptor" : "ARMmbed/mbed-6lowpan-eventloop-adaptor#alpha2-release",
+    "yottos": "ARMmbed/yottos#event"
   },
   "targetDependencies": {}
 }
