@@ -24,7 +24,6 @@
 #include "mbed/FunctionPointer.h"
 
 using minar::Scheduler;
-using minar::pre_loop_hook_t;
 using mbed::FunctionPointer1;
 
 typedef struct arm_core_tasklet_list_s {
@@ -50,7 +49,6 @@ static arm_core_tasklet_list_s *tasklet_dynamically_allocate(void);
 static arm_core_event_s *event_dynamically_allocate(void);
 static arm_core_event_s *event_core_get(void);
 static void event_core_write(arm_core_event_s *event);
-static pre_loop_hook_t prev_hook = NULL;
 
 static arm_core_tasklet_list_s *event_tasklet_handler_get(uint8_t tasklet_id)
 {
