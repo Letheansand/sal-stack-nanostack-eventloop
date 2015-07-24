@@ -16,7 +16,7 @@
   ],
   "dependencies": {
     "mbed-client-libservice": "~3.0.0",
-    "mbed-6lowpan-eventloop-adaptor": "ARMmbed/mbed-6lowpan-eventloop-adaptor#master",
+    "mbed-6lowpan-eventloop-adaptor": "ARMmbed/mbed-6lowpan-eventloop-adaptor#ns_minar_take2",
     "minar": "~0.4.1"
   },
   "targetDependencies": {}
