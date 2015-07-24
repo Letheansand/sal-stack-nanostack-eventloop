@@ -20,6 +20,12 @@
 
 #include "platform/arm_hal_interrupt.h"
 
+#include "minar/minar.h"
+#include "mbed/FunctionPointer.h"
+
+using minar::Scheduler;
+using minar::pre_loop_hook_t;
+using mbed::FunctionPointer1;
 
 typedef struct arm_core_tasklet_list_s {
     int8_t id; /**< Event handler Tasklet ID */
@@ -44,6 +50,7 @@ static arm_core_tasklet_list_s *tasklet_dynamically_allocate(void);
 static arm_core_event_s *event_dynamically_allocate(void);
 static arm_core_event_s *event_core_get(void);
 static void event_core_write(arm_core_event_s *event);
+static pre_loop_hook_t prev_hook = NULL;
 
 static arm_core_tasklet_list_s *event_tasklet_handler_get(uint8_t tasklet_id)
 {
@@ -81,30 +88,30 @@ int8_t eventOS_event_handler_create(void (*handler_func_ptr)(arm_event_s *), uin
     }
 
     //Allocate new
-    arm_core_tasklet_list_s *new = tasklet_dynamically_allocate();
-    if (!new) {
+    arm_core_tasklet_list_s *new_task = tasklet_dynamically_allocate();
+    if (!new_task) {
         return -2;
     }
 
     event_tmp = event_core_get();
     if (!event_tmp) {
-        ns_dyn_mem_free(new);
+        ns_dyn_mem_free(new_task);
         return -2;
     }
 
     //Fill in tasklet; add to list
-    new->id = tasklet_get_free_id();
-    new->func_ptr = handler_func_ptr;
-    ns_list_add_to_end(&arm_core_tasklet_list, new);
+    new_task->id = tasklet_get_free_id();
+    new_task->func_ptr = handler_func_ptr;
+    ns_list_add_to_end(&arm_core_tasklet_list, new_task);
 
     //Queue "init" event for the new task
-    event_tmp->data.receiver = new->id;
+    event_tmp->data.receiver = new_task->id;
     event_tmp->data.sender = 0;
     event_tmp->data.event_type = init_event_type;
     event_tmp->data.event_data = 0;
     event_core_write(event_tmp);
 
-    return new->id;
+    return new_task->id;
 }
 
 /**
@@ -133,12 +140,12 @@ int8_t eventOS_event_send(arm_event_s *event)
 
 static arm_core_event_s *event_dynamically_allocate(void)
 {
-    return ns_dyn_mem_alloc(sizeof(arm_core_event_s));
+    return (arm_core_event_s*)ns_dyn_mem_alloc(sizeof(arm_core_event_s));
 }
 
 static arm_core_tasklet_list_s *tasklet_dynamically_allocate(void)
 {
-    return ns_dyn_mem_alloc(sizeof(arm_core_tasklet_list_s));
+    return (arm_core_tasklet_list_s*)ns_dyn_mem_alloc(sizeof(arm_core_tasklet_list_s));
 }
 
 
@@ -180,6 +187,28 @@ static arm_core_event_s *event_core_read(void)
     return event;
 }
 
+static void event_callback(arm_core_event_s *cur_event) {
+    arm_core_tasklet_list_s *tasklet;
+    arm_event_s event;
+
+    platform_enter_critical();
+    ns_list_remove(&event_queue_active, cur_event);
+    platform_exit_critical();
+
+    curr_tasklet = 0;
+    event = cur_event->data;
+    event_core_free_push(cur_event);
+    tasklet = event_tasklet_handler_get(event.receiver);
+    if (tasklet) {
+        curr_tasklet = event.receiver;
+        /* Tasklet Scheduler Call */
+        tasklet->func_ptr(&event);
+        /* Set Current Tasklet to Idle state */
+        curr_tasklet = 0;
+    }
+}
+
+
 void event_core_write(arm_core_event_s *event)
 {
     platform_enter_critical();
@@ -199,6 +228,7 @@ void event_core_write(arm_core_event_s *event)
     /* Wake From Idle */
     eventOS_scheduler_signal();
     platform_exit_critical();
+    Scheduler::postCallback(FunctionPointer1<void, arm_core_event_s*>(event_callback).bind(event)).delay(event->data.priority);
 }
 
 /**
@@ -263,6 +293,7 @@ int eventOS_scheduler_timer_synch_after_sleep(uint32_t sleep_ticks)
     return -1;
 }
 
+#if 0 // these functions aren't used anymore
 /**
  *
  * \brief Infinite Event Read Loop.
@@ -308,3 +339,4 @@ noreturn void eventOS_scheduler_run(void)
         event_dispatch_cycle();
     }
 }
+#endif
