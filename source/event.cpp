@@ -24,7 +24,7 @@
 #include "mbed/FunctionPointer.h"
 
 using minar::Scheduler;
-using mbed::FunctionPointer1;
+using mbed::FunctionPointer0;
 
 typedef struct arm_core_tasklet_list_s {
     int8_t id; /**< Event handler Tasklet ID */
@@ -43,7 +43,7 @@ static NS_LIST_DEFINE(free_event_entry, arm_core_event_s, link);
 
 /** Curr_tasklet tell to core and platform which task_let is active, Core Update this automatic when switch Tasklet. */
 int8_t curr_tasklet = 0;
-
+static volatile bool run_scheduled = false;
 
 static arm_core_tasklet_list_s *tasklet_dynamically_allocate(void);
 static arm_core_event_s *event_dynamically_allocate(void);
@@ -223,10 +223,14 @@ void event_core_write(arm_core_event_s *event)
         ns_list_add_to_end(&event_queue_active, event);
     }
 
+    if (!run_scheduled) {
+        Scheduler::postCallback(FunctionPointer0<void>(eventOS_scheduler_run).bind()).tolerance(0);
+        run_scheduled = true;
+    }
+
     /* Wake From Idle */
     eventOS_scheduler_signal();
     platform_exit_critical();
-    Scheduler::postCallback(FunctionPointer1<void, arm_core_event_s*>(event_callback).bind(event)).delay(event->data.priority);
 }
 
 /**
@@ -291,7 +295,6 @@ int eventOS_scheduler_timer_synch_after_sleep(uint32_t sleep_ticks)
     return -1;
 }
 
-#if 0 // these functions aren't used anymore
 /**
  *
  * \brief Infinite Event Read Loop.
@@ -299,7 +302,7 @@ int eventOS_scheduler_timer_synch_after_sleep(uint32_t sleep_ticks)
  * Function Read and handle Cores Event and switch/enable tasklet which are event receiver. WhenEvent queue is empty it goes to sleep
  *
  */
-void event_dispatch_cycle(void)
+bool event_dispatch_cycle(void)
 {
     arm_core_tasklet_list_s *tasklet;
     arm_core_event_s *cur_event;
@@ -319,8 +322,9 @@ void event_dispatch_cycle(void)
             /* Set Current Tasklet to Idle state */
             curr_tasklet = 0;
         }
+        return true;
     } else {
-        eventOS_scheduler_idle();
+        return false;
     }
 }
 
@@ -333,8 +337,6 @@ void event_dispatch_cycle(void)
  */
 noreturn void eventOS_scheduler_run(void)
 {
-    while (1) {
-        event_dispatch_cycle();
-    }
+    while (event_dispatch_cycle());
+    run_scheduled = false;
 }
-#endif
